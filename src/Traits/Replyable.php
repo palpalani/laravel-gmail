@@ -411,10 +411,10 @@ trait Replyable
 			->html($this->message)
 			->priority($this->priority);
 
-		if (!isset($this->cc)) {
+		if (isset($this->cc)) {
 			$this->symfonyEmail->cc($this->returnCopies($this->cc));
 		}
-		if (!isset($this->bcc)) {
+		if (isset($this->bcc)) {
 			$this->symfonyEmail->bcc($this->returnCopies($this->bcc));
 		}
 
