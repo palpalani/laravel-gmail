@@ -17,11 +17,14 @@ if you need **Laravel 5** compatibility please use version `2.0.x`.
 if you need **Laravel 6** compatibility please use version `3.0.x`.
 if you need **Laravel 7** compatibility please use version `4.0.x`.
 if you need **Laravel 8** compatibility please use version `5.0.x`.
+if you need **Laravel 9** compatibility please use version `6.0.x`.
+if you need **Laravel 10** compatibility please use version `6.1.x`.
+if you need **Laravel 11** compatibility please use version `6.1.x`.
 
 # Requirements
 
-* PHP ^8.0
-* Laravel 9
+* PHP ^8.2
+* Laravel 10/11
 
 # Installation
 
