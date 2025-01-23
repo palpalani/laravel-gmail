@@ -1,75 +1,77 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Dacastro4\LaravelGmail\Traits;
 
 use Dacastro4\LaravelGmail\Services\Message\Mail;
+use Exception;
 use Google_Service_Gmail_ModifyMessageRequest;
 
 trait ModifiesLabels
 {
+    private $messageRequest;
 
-	private $messageRequest;
+    public function __construct()
+    {
+        $this->messageRequest = new Google_Service_Gmail_ModifyMessageRequest();
+    }
 
-	public function __construct()
-	{
-		$this->messageRequest = new Google_Service_Gmail_ModifyMessageRequest();
-	}
+    abstract public function getId();
 
-	/**
-	 * Adds labels to the email
-	 *
-	 * @param string|array $labels
-	 *
-	 * @return Mail|string
-	 * @throws \Exception
-	 */
-	public function addLabel($labels)
-	{
-		if (is_string($labels)) {
-			$labels = [$labels];
-		}
+    /**
+     * Adds labels to the email
+     *
+     * @param string|array $labels
+     *
+     * @return Mail|string
+     * @throws Exception
+     */
+    public function addLabel($labels)
+    {
+        if (is_string($labels)) {
+            $labels = [$labels];
+        }
 
-		$this->messageRequest->setAddLabelIds($labels);
+        $this->messageRequest->setAddLabelIds($labels);
 
-		try {
-			return $this->modify();
-		} catch (\Exception $e) {
-			throw new \Exception("Couldn't add labels: {$e->getMessage()}");
-		}
-	}
+        try {
+            return $this->modify();
+        } catch (Exception $e) {
+            throw new Exception("Couldn't add labels: {$e->getMessage()}");
+        }
+    }
 
-	/**
-	 * Executes the modification
-	 *
-	 * @return Mail
-	 */
-	private function modify()
-	{
-		return new Mail($this->service->users_messages->modify('me', $this->getId(), $this->messageRequest));
-	}
+    /**
+     * Removes labels from the email
+     *
+     * @param string|array $labels
+     *
+     * @return Mail|string
+     * @throws Exception
+     */
+    public function removeLabel($labels)
+    {
+        if (is_string($labels)) {
+            $labels = [$labels];
+        }
 
-	public abstract function getId();
+        $this->messageRequest->setRemoveLabelIds($labels);
 
-	/**
-	 * Removes labels from the email
-	 *
-	 * @param string|array $labels
-	 *
-	 * @return Mail|string
-	 * @throws \Exception
-	 */
-	public function removeLabel($labels)
-	{
-		if (is_string($labels)) {
-			$labels = [$labels];
-		}
+        try {
+            return $this->modify();
+        } catch (Exception $e) {
+            throw new Exception("Couldn't remove labels: {$e->getMessage()}");
+        }
+    }
 
-		$this->messageRequest->setRemoveLabelIds($labels);
-
-		try {
-			return $this->modify();
-		} catch (\Exception $e) {
-			throw new \Exception("Couldn't remove labels: {$e->getMessage()}");
-		}
-	}
+    /**
+     * Executes the modification
+     *
+     * @return Mail
+     */
+    private function modify()
+    {
+        return new Mail($this->service->users_messages->modify('me', $this->getId(), $this->messageRequest));
+    }
 }

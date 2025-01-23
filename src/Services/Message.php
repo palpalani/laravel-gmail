@@ -1,201 +1,208 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Dacastro4\LaravelGmail\Services;
 
 use Dacastro4\LaravelGmail\LaravelGmailClass;
 use Dacastro4\LaravelGmail\Services\Message\Mail;
 use Dacastro4\LaravelGmail\Traits\Filterable;
 use Dacastro4\LaravelGmail\Traits\SendsParameters;
+use Google_Exception;
 use Google_Service_Gmail;
+use Google_Service_Gmail_ListMessagesResponse;
+use Google_Service_Gmail_Message;
 
-class Message
+final class Message
 {
+    use Filterable;
 
-	use SendsParameters,
-		Filterable;
+    use SendsParameters;
 
-	public $service;
+    public $service;
 
-	public $preload = false;
+    public $preload = false;
 
-	public $pageToken;
+    public $pageToken;
 
-	public $client;
+    public $client;
 
-	/**
-	 * Optional parameter for getting single and multiple emails
-	 *
-	 * @var array
-	 */
-	protected $params = [];
+    /**
+     * Optional parameter for getting single and multiple emails
+     *
+     * @var array
+     */
+    protected $params = [];
 
-	/**
-	 * Message constructor.
-	 *
-	 * @param LaravelGmailClass $client
-	 */
-	public function __construct(LaravelGmailClass $client)
-	{
-		$this->client = $client;
-		$this->service = new Google_Service_Gmail($client);
-	}
+    /**
+     * Message constructor.
+     *
+     * @param LaravelGmailClass $client
+     */
+    public function __construct(LaravelGmailClass $client)
+    {
+        $this->client = $client;
+        $this->service = new Google_Service_Gmail($client);
+    }
 
-	/**
-	 * Returns next page if available of messages or an empty collection
-	 *
-	 * @return \Illuminate\Support\Collection
-	 * @throws \Google_Exception
-	 */
-	public function next()
-	{
-		if ($this->pageToken) {
-			return $this->all($this->pageToken);
-		} else {
-			return new MessageCollection([], $this);
-		}
-	}
+    /**
+     * Returns next page if available of messages or an empty collection
+     *
+     * @return \Illuminate\Support\Collection
+     * @throws Google_Exception
+     */
+    public function next()
+    {
+        if ($this->pageToken) {
+            return $this->all($this->pageToken);
+        }
+        return new MessageCollection([], $this);
 
-	/**
-	 * Returns a collection of Mail instances
-	 *
-	 * @param string|null $pageToken
-	 *
-	 * @return \Illuminate\Support\Collection
-	 * @throws \Google_Exception
-	 */
-	public function all(string $pageToken = null)
-	{
-		if (!is_null($pageToken)) {
-			$this->add($pageToken, 'pageToken');
-		}
+    }
 
-		$mails = [];
-		$response = $this->getMessagesResponse();
-		$this->pageToken = method_exists($response, 'getNextPageToken') ? $response->getNextPageToken() : null;
+    /**
+     * Returns a collection of Mail instances
+     *
+     * @param string|null $pageToken
+     *
+     * @return \Illuminate\Support\Collection
+     * @throws Google_Exception
+     */
+    public function all(?string $pageToken = null)
+    {
+        if (null !== $pageToken) {
+            $this->add($pageToken, 'pageToken');
+        }
 
-		$messages = $response->getMessages();
+        $mails = [];
+        $response = $this->getMessagesResponse();
+        $this->pageToken = method_exists($response, 'getNextPageToken') ? $response->getNextPageToken() : null;
 
-		if (!$this->preload) {
-			foreach ($messages as $message) {
-				$mails[] = new Mail($message, $this->preload, $this->client->userId);
-			}
-		} else {
-			$mails = count($messages) > 0 ? $this->batchRequest($messages) : [];
-		}
+        $messages = $response->getMessages();
 
-		return new MessageCollection($mails, $this);
-	}
+        if ( ! $this->preload) {
+            foreach ($messages as $message) {
+                $mails[] = new Mail($message, $this->preload, $this->client->userId);
+            }
+        } else {
+            $mails = count($messages) > 0 ? $this->batchRequest($messages) : [];
+        }
 
-	/**
-	 * Returns boolean if the page token variable is null or not
-	 *
-	 * @return bool
-	 */
-	public function hasNextPage()
-	{
-		return !!$this->pageToken;
-	}
+        return new MessageCollection($mails, $this);
+    }
 
-	/**
-	 * Limit the messages coming from the queryxw
-	 *
-	 * @param int $number
-	 *
-	 * @return Message
-	 */
-	public function take($number)
-	{
-		$this->params['maxResults'] = abs((int)$number);
+    /**
+     * Returns boolean if the page token variable is null or not
+     *
+     * @return bool
+     */
+    public function hasNextPage()
+    {
+        return ! ! $this->pageToken;
+    }
 
-		return $this;
-	}
+    /**
+     * Limit the messages coming from the queryxw
+     *
+     * @param int $number
+     *
+     * @return Message
+     */
+    public function take($number)
+    {
+        $this->params['maxResults'] = abs((int) $number);
 
-	/**
-	 * @param $id
-	 *
-	 * @return Mail
-	 */
-	public function get($id)
-	{
-		$message = $this->getRequest($id);
+        return $this;
+    }
 
-		return new Mail($message, false, $this->client->userId);
-	}
+    /**
+     * @param $id
+     *
+     * @return Mail
+     */
+    public function get($id)
+    {
+        $message = $this->getRequest($id);
 
-	/**
-	 * Creates a batch request to get all emails in a single call
-	 *
-	 * @param $allMessages
-	 *
-	 * @return array|null
-	 */
-	public function batchRequest($allMessages)
-	{
-		$this->client->setUseBatch(true);
+        return new Mail($message, false, $this->client->userId);
+    }
 
-		$batch = $this->service->createBatch();
+    /**
+     * Creates a batch request to get all emails in a single call
+     *
+     * @param $allMessages
+     *
+     * @return array|null
+     */
+    public function batchRequest($allMessages)
+    {
+        $this->client->setUseBatch(true);
 
-		foreach ($allMessages as $key => $message) {
-			$batch->add($this->getRequest($message->getId()), $key);
-		}
+        $batch = $this->service->createBatch();
 
-		$messagesBatch = $batch->execute();
+        foreach ($allMessages as $key => $message) {
+            $batch->add($this->getRequest($message->getId()), $key);
+        }
 
-		$this->client->setUseBatch(false);
+        $messagesBatch = $batch->execute();
 
-		$messages = [];
+        $this->client->setUseBatch(false);
 
-		foreach ($messagesBatch as $message) {
-			$messages[] = new Mail($message, false, $this->client->userId);
-		}
+        $messages = [];
 
-		return $messages;
-	}
+        foreach ($messagesBatch as $message) {
+            $messages[] = new Mail($message, false, $this->client->userId);
+        }
 
-	/**
-	 * Preload the information on each Mail objects.
-	 * If is not preload you will have to call the load method from the Mail class
-	 * @return $this
-	 * @see Mail::load()
-	 *
-	 */
-	public function preload()
-	{
-		$this->preload = true;
+        return $messages;
+    }
 
-		return $this;
-	}
+    /**
+     * Preload the information on each Mail objects.
+     * If is not preload you will have to call the load method from the Mail class
+     * @return $this
+     * @see Mail::load()
+     *
+     */
+    public function preload()
+    {
+        $this->preload = true;
 
-	public function getUser()
-	{
-		return $this->client->user();
-	}
+        return $this;
+    }
 
-	/**
-	 * @param $id
-	 *
-	 * @return \Google_Service_Gmail_Message
-	 */
-	private function getRequest($id)
-	{
-		return $this->service->users_messages->get('me', $id);
-	}
+    public function getUser()
+    {
+        return $this->client->user();
+    }
 
-	/**
-	 * @return \Google_Service_Gmail_ListMessagesResponse|object
-	 * @throws \Google_Exception
-	 */
-	private function getMessagesResponse()
-	{
-		$responseOrRequest = $this->service->users_messages->listUsersMessages('me', $this->params);
+    /**
+     * @param $id
+     *
+     * @return Google_Service_Gmail_Message
+     */
+    private function getRequest($id)
+    {
+        return $this->service->users_messages->get('me', $id);
+    }
 
-		if (get_class($responseOrRequest) === "GuzzleHttp\Psr7\Request") {
-			$response = $this->service->getClient()->execute($responseOrRequest,
-				'Google_Service_Gmail_ListMessagesResponse');
+    /**
+     * @return Google_Service_Gmail_ListMessagesResponse|object
+     * @throws Google_Exception
+     */
+    private function getMessagesResponse()
+    {
+        $responseOrRequest = $this->service->users_messages->listUsersMessages('me', $this->params);
 
-			return $response;
-		}
+        if ("GuzzleHttp\Psr7\Request" === get_class($responseOrRequest)) {
+            $response = $this->service->getClient()->execute(
+                $responseOrRequest,
+                'Google_Service_Gmail_ListMessagesResponse',
+            );
 
-		return $responseOrRequest;
-	}
+            return $response;
+        }
+
+        return $responseOrRequest;
+    }
 }
